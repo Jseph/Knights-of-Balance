@@ -7,7 +7,17 @@ require 'aggressiveai'
 
 local debug_mode = true
 local test_monk = true
-local get_debug_cards = function() 
+function get_debug_cards(is_p1)
+    player_buffs = is_p1 and {
+        drawCardsCountAtTurnEndDef(5),
+        discardCardsAtTurnStartDef(),
+        replace_spring_blossom_buff(),
+        fatigueCount(40, 1, "FatigueP1"),
+    } or {
+        drawCardsCountAtTurnEndDef(5),
+        discardCardsAtTurnStartDef(),
+        fatigueCount(40, 1, "FatigueP2"),
+    } 
     if test_monk then
         return {
             reserve = {
@@ -18,8 +28,7 @@ local get_debug_cards = function()
             },
             hand = {
                 { qty = 1, card = monk_horn_of_ascendance_carddef() },
-                { qty = 5, card = monk_spring_blossom_carddef() },
-                { qty = 1, card = monk_resplendent_blossom_carddef() },
+                { qty = 6, card = monk_spring_blossom_carddef() },
                 { qty = 2, card = monk_cobra_fang_carddef() },
             },
             discard = {
@@ -28,13 +37,7 @@ local get_debug_cards = function()
             skills = {
                 { qty = 1, card = monk_wraps_of_strength_carddef() },
             },
-            buffs = {
-                drawCardsCountAtTurnEndDef(5),
-                discardCardsAtTurnStartDef(),
-                -- This isn't correct when this is used for p1 but it's 
-                -- ok for debugging
-                fatigueCount(40, 1, "FatigueP2"),
-            }
+            buffs = player_buffs
         }
     else
         return {
@@ -62,13 +65,7 @@ local get_debug_cards = function()
             skills = {
                 { qty = 1, card = cleric_shining_breastplate_carddef() },
             },
-            buffs = {
-                drawCardsCountAtTurnEndDef(5),
-                discardCardsAtTurnStartDef(),
-                -- This isn't correct when this is used for p1 but it's 
-                -- ok for debugging
-                fatigueCount(40, 1, "FatigueP2"),
-            }
+            buffs = player_buffs
         }
     end
 end
@@ -92,10 +89,11 @@ function setupGame(g)
                 init = {
                     fromEnv = plid1
                 },
-                cards = debug_mode and get_debug_cards() or {
+                cards = debug_mode and get_debug_cards(true) or {
                     buffs = {
                         drawCardsCountAtTurnEndDef(5),
                         discardCardsAtTurnStartDef(),
+                        replace_spring_blossom_buff(),
                         fatigueCount(40, 1, "FatigueP1"),
                     }
                 }
@@ -107,7 +105,7 @@ function setupGame(g)
                 init = {
                     fromEnv = plid2
                 },
-                cards = debug_mode and get_debug_cards() or {
+                cards = debug_mode and get_debug_cards(false) or {
                     buffs = {
                         drawCardsCountAtTurnEndDef(5),
                         discardCardsAtTurnStartDef(),
@@ -769,6 +767,33 @@ function monk_cobra_fang_carddef()
                 effect = ifElseEffect(getCustomValue(currentPid).gte(getCounter(counter_name).add(2)),
                     incrementCounterEffect(counter_name, 2).seq(fireAbilityTriggerEffect(trigger2_name)),
                     incrementCounterEffect(counter_name, 1).seq(fireAbilityTriggerEffect(trigger_name)))
+            })
+        }
+    })
+end
+
+--====================================
+function replace_spring_blossom_buff()
+    local spring_blossom_selector = function(player_id) 
+        return selectLoc(loc(player_id, handPloc)).union(selectLoc(loc(player_id, deckPloc)))
+            .where(isCardName("monk_spring_blossom")) 
+    end
+    local ef = ifEffect(spring_blossom_selector(currentPid).count().gte(6),
+            randomTarget(const(1), transformTarget("monk_resplendent_blossom"))
+                .apply(spring_blossom_selector(currentPid)))
+        .seq(ifEffect(spring_blossom_selector(oppPid).count().gte(6),
+            randomTarget(const(1), transformTarget("monk_resplendent_blossom"))
+                .apply(spring_blossom_selector(oppPid))))
+        .seq(sacrificeSelf())
+
+    return createGlobalBuff({
+        id = "fix_monk_gold_upgrade",
+        name = "Monk Gold Upgrade Fixer",
+        abilities = {
+            createAbility({
+                id = "fix_monk_gold_upgrade_ability",
+                trigger = startOfGameTrigger,
+                effect = ef
             })
         }
     })
