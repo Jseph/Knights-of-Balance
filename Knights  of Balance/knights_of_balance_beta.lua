@@ -604,7 +604,7 @@ function draw_a_card_ability()
 end
 --Monk
 --=========================================
-function monk_horn_of_ascendance2_carddef()
+function monk_horn_of_ascendance_carddef()
     -- This card draws 1 and grants 2 gold after your next acquisition.
     local cardLayout = createLayout({
         name = "Horn of Ascendance",
