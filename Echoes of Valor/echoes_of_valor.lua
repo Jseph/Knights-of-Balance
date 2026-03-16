@@ -781,8 +781,7 @@ function cleric_shining_breastplate_carddef()
             }),
             createAbility({
                 id = card_name .. "_track_health_gained",
-                effect = showTextEffect("Congrats on the heal!").seq(
-                addSlotToPlayerEffect(currentPlayer(), gainedHealthSlot)),
+                effect = addSlotToPlayerEffect(currentPlayer(), gainedHealthSlot),
                 trigger = gainedHealthTrigger,
                 cost = noCost,
                 tags = { toughestTag }

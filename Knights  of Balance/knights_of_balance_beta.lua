@@ -6,17 +6,21 @@ require 'hardai_2'
 require 'aggressiveai'
 
 local debug_mode = true
-local test_monk = true
+local test_monk = false
 function get_debug_cards(is_p1)
     player_buffs = is_p1 and {
         drawCardsCountAtTurnEndDef(5),
         discardCardsAtTurnStartDef(),
         replace_spring_blossom_buff(),
         fatigueCount(40, 1, "FatigueP1"),
+        level_up_buff(),
+        level_up_event_listener_buf()
     } or {
         drawCardsCountAtTurnEndDef(5),
         discardCardsAtTurnStartDef(),
         fatigueCount(40, 1, "FatigueP2"),
+        level_up_buff(),
+        level_up_event_listener_buf()
     } 
     if test_monk then
         return {
@@ -470,8 +474,7 @@ function cleric_shining_breastplate_carddef()
             }),
             createAbility({
                 id = card_name .. "_track_health_gained",
-                effect = showTextEffect("Congrats on the heal!").seq(
-                addSlotToPlayerEffect(currentPlayer(), gainedHealthSlot)),
+                effect = addSlotToPlayerEffect(currentPlayer(), gainedHealthSlot),
                 trigger = gainedHealthTrigger,
                 cost = noCost,
                 tags = { toughestTag }
@@ -796,5 +799,195 @@ function replace_spring_blossom_buff()
                 effect = ef
             })
         }
+    })
+end
+
+--====================================
+-- Testing leveling up to 24.  This should eventually just be from 18 to 24 but for
+-- local testing we need to support lower levels as well.  I'll just star at lvl 1
+-- and fighter and we can work from there.
+local level_up_trigger = "level_up_trigger"
+
+function all_current_player_cards()
+    return selectLoc(loc(currentPid, handPloc))
+        .union(selectLoc(loc(currentPid, deckPloc)))
+        .union(selectLoc(loc(currentPid, skillsPloc)))
+end
+
+-- Transforms card 1 into card 2
+function replace_card_choice(card_names)
+    local card_name1 = card_names[1]
+    local card_name2 = card_names[2]
+    return {
+        effect = randomTarget(const(1), transformTarget(card_name2))
+            .apply(all_current_player_cards().where(isCardName(card_name1)))
+            .seq(incrementCounterEffect("level", 1))
+            .seq(fireAbilityTriggerEffect(level_up_trigger)),
+        layout = createLayout({
+            name = "Replace a card.",
+            art = "art/epicart/the_people_s_champion",
+            text = "Replace " .. card_name1 .. " with " .. card_name2,
+        }),
+        tags = {}
+    }
+end
+
+function gain_max_health_choice(amount)
+    return {
+        effect = gainMaxHealthEffect(currentPid, amount).seq(gainHealthEffect(amount))
+            .seq(incrementCounterEffect("level", 1))
+            .seq(fireAbilityTriggerEffect(level_up_trigger)),
+        layout = createLayout({
+            name = "+" .. amount .. " health",
+            art = "art/epicart/the_people_s_champion",
+            text = "Gain " .. amount .. " max health",
+        }),
+        tags = {}
+    }
+end
+
+function upgrade_skill(skill_tree)
+    local has_upgradable_skill = selectLoc(loc(currentPid, skillsPloc))
+        .where(isCardName(skill_tree[1][1])
+            .Or(isCardName(skill_tree[2][1]))
+            .Or(isCardName(skill_tree[3][1])))
+        .count().gte(1)
+    local choices_effect = nullEffect()
+    for i = 1, 3 do
+        choices_effect = ifElseEffect(
+            selectLoc(loc(currentPid, skillsPloc)).where(isCardName(skill_tree[i][1])).count().gte(1),
+            pushChoiceEffect({
+                choices = {
+                    replace_card_choice({skill_tree[i][1], skill_tree[i][2]}),
+                    replace_card_choice({skill_tree[i][1], skill_tree[i][3]})
+                }
+            }),
+            choices_effect)
+    end
+    return {
+        effect = choices_effect,
+        layout = createLayout({
+            name = "Upgrade skill",
+            art = "art/epicart/the_people_s_champion",
+            text = "Upgrade skill",
+        }),
+        condition = has_upgradable_skill,
+        tags = {}
+    }
+end
+
+function upgrade_ability(ability_tree)
+    return {
+        effect = nullEffect()
+            .seq(incrementCounterEffect("level", 1))
+            .seq(fireAbilityTriggerEffect(level_up_trigger)),
+        layout = createLayout({
+            name = "Classes by Aarkenell",
+            art = "art/epicart/the_people_s_champion",
+            text = "Upgrade ability",
+        }),
+        tags = {}
+    }
+end
+
+local fighter_skill_tree = {
+    {"fighter_shoulder_bash", "fighter_knock_back", "fighter_shoulder_smash"},
+    {"fighter_knock_back", "fighter_group_tackle", "fighter_knock_down"},
+    {"fighter_shoulder_smash", "fighter_knock_down", "fighter_shoulder_crush"}
+}
+
+local fighter_ability_tree = {
+    {"fighter_precision_blow", "fighter_powerful_blow"},
+    {"fighter_powerful_blow", "fighter_crushing_blow"},
+    {"fighter_crushing_blow", "fighter_sweeping_blow", "fighter_smashing_blow"},
+    {"fighter_sweeping_blow", "fighter_wirling_blow", "fighter_mighty_blow"},
+    {"fighter_wirling_blow", "fighter_cleaving_blow", "fighter_cleaving_blow"}
+}
+
+local max_level = 6
+
+local fighter_choices = {
+    -- Level 2
+    {replace_card_choice({"fighter_precision_blow", "fighter_crushing_blow"})},
+    -- Level 3
+    {replace_card_choice({"fighter_crushing_blow", "fighter_powerful_blow"})},
+    -- Level 4
+    {gain_max_health_choice(9), upgrade_skill(fighter_skill_tree)},
+    -- Level 5
+    {gain_max_health_choice(9), upgrade_skill(fighter_skill_tree)},
+    -- Level 6
+    {gain_max_health_choice(9), upgrade_skill(fighter_skill_tree)},
+    -- Level 7
+    {gain_max_health_choice(9), upgrade_skill(fighter_skill_tree)},
+}
+
+function level_up_effect(level)
+    return pushChoiceEffect({
+        choices = fighter_choices[level]
+    })
+end
+
+function level_up_event_listener_buf()
+    local level_up = nullEffect()
+    for i = 1, max_level do
+        level_up = 
+            ifElseEffect(getCounter("level").gte(i), level_up_effect(i), level_up)
+    end
+    -- Stop leveling up after max level.
+    level_up = ifElseEffect(getCounter("level").gte(max_level + 1), nullEffect(), level_up)
+    return createGlobalBuff({
+        id = "level_up_event_listener_buf",
+        name = "Level up event listener",
+        abilities = {
+            createAbility({
+                id = "level_up_event_listener_ability",
+                trigger = abilityTrigger(level_up_trigger),
+                activations = multipleActivations,
+                cost = noCost,
+                effect = level_up
+            })
+        }
+    })
+end
+
+function level_up_buff()
+    return cardChoiceSelectorEffect({
+        id = "SoG_Choice",
+        name = "First choice",
+        trigger = startOfTurnTrigger,
+        upperTitle  = "Welcome! How would you like to proceed?",
+        lowerTitle  = "",
+        -- 1.1 choose class
+        effectFirst = resetCounterEffect("level").seq(incrementCounterEffect("level", 1)).seq(fireAbilityTriggerEffect(level_up_trigger)),
+        -- 1.2 choice - learn about the mod		
+        effectSecond = nullEffect(),
+
+-- 1.1 layout - choose class
+        layoutFirst = createLayout({
+            name = "Level up!",
+            art = "art/t_unify_apsara",
+            xmlText=[[<vlayout>
+<hlayout flexiblewidth="1">
+<text text="Start the level up sequence." fontsize="26"/>
+</hlayout>
+</vlayout>
+			
+			]]
+			}),
+
+-- 1.2 layout - learn about the mod
+        layoutSecond = createLayout({
+            name = "Play at Current Level",
+            art = "art/treasures/t_magic_scroll_souveraine",
+            xmlText=[[
+			<vlayout>
+<hlayout flexiblewidth="1">
+<text text="Skip level up sequence."
+fontsize="26"/>
+</hlayout>
+</vlayout>
+			]] }) ,
+
+        turn = 1
     })
 end
