@@ -7,6 +7,7 @@ require 'aggressiveai'
 
 local debug_mode = true
 local test_monk = false
+local test_cleric = false
 function get_debug_cards(is_p1)
     player_buffs = is_p1 and {
         drawCardsCountAtTurnEndDef(5),
@@ -43,6 +44,30 @@ function get_debug_cards(is_p1)
             },
             buffs = player_buffs
         }
+    elseif test_cleric then
+        return {
+            reserve = {
+                { qty = 1, card = cleric_enduring_follower_carddef() },
+            },
+            deck = {
+                { qty = 4, card = cleric_everburning_candle_carddef() },
+                 { qty = 2, card = cleric_prayer_beads_carddef() },
+            },
+            hand = {
+                { qty = 1, card = cleric_everburning_candle_carddef() },
+                { qty = 1, card = cleric_prayer_beads_carddef()},
+                { qty = 1, card = cleric_imperial_sailor_carddef() },
+            },
+            discard = {
+                 { qty = 2, card = cleric_imperial_sailor_carddef() },
+                 { qty = 1, card = cleric_enduring_follower_carddef() },
+                 { qty = 1, card = cleric_follower_b_carddef() }              
+            },
+            skills = {
+                --{ qty = 1, card = cleric_shining_breastplate_carddef() },
+            },
+            buffs = player_buffs
+        }
     else
         return {
             reserve = {
@@ -61,10 +86,12 @@ function get_debug_cards(is_p1)
                 { qty = 2, card = cleric_follower_b_carddef() },
                 { qty = 2, card = cleric_imperial_sailor_carddef() },
                 { qty = 1, card = cleric_brightstar_shield_carddef() },
+                { qty = 1, card = cleric_everburning_candle_carddef() },
                 { qty = 1, card = sway_carddef() },
             },
             discard = {
                 { qty = 2, card = cleric_follower_b_carddef() },
+                { qty = 1, card = cleric_follower_b_carddef() },
             },
             skills = {
                 { qty = 1, card = cleric_shining_breastplate_carddef() },
@@ -104,7 +131,7 @@ function setupGame(g)
             },
             {
                 id = plid2,
-                --isAi = debug_mode,
+                isAi = debug_mode,
                 startDraw = 5,
                 init = {
                     fromEnv = plid2
@@ -436,11 +463,11 @@ function cleric_shining_breastplate_carddef()
         xmlText =[[<hlayout spacing="1" forcewidth="true">
                     <icon text="{requiresHealth_25}" fontsize="90"/>    
                     <text text="If you are at full health or have +{health} this turn,
-                put a champion without a cost from your discard into play." fontsize="18"/>
+                put a champion without a cost (3 {shield} max) from your discard into play." fontsize="18"/>
                     <text text=" " fontsize="80"/>
                 </hlayout>]]
     })
-	local noCostChamps = selectLoc(loc(currentPid, discardPloc)).where(isCardChampion().And(getCardCost().eq(0)))
+	local noCostChamps = selectLoc(loc(currentPid, discardPloc)).where(isCardChampion().And(getCardCost().eq(0)).And(getCardHealth().lte(3)))
     local gainedHealthKey = "gainedHealthThisTurn"
     local gainedHealthSlot = createPlayerSlot({ key = gainedHealthKey, expiry = { endOfTurnExpiry } })
     return createMagicArmorDef({
@@ -468,7 +495,7 @@ function cleric_shining_breastplate_carddef()
                 cost = expendCost,
                 check = getPlayerHealth(currentPid).eq(getPlayerMaxHealth(currentPid))
                             .Or(hasPlayerSlot(currentPlayer(), gainedHealthKey))
-                            .And(noCostChamps.count().gte(1))
+                            .And(noCostChamps.where(getCardHealth().lte(3)).count().gte(1))
                             .And(getPlayerHealth(currentPid).gte(25)),
                 tags = { gainCombatTag }
             }),
@@ -482,6 +509,156 @@ function cleric_shining_breastplate_carddef()
         },
         layoutPath = "icons/" .. card_name,
         layout = cardLayout
+    })
+end
+
+--=========================================
+function cleric_everburning_candle_carddef()
+    local cardLayout = createLayout({
+        name = "Everburning Candle",
+        art = "art/t_cleric_everburning_candle",
+        frame = "frames/Cleric_CardFrame",
+        cardTypeLabel = "Item",
+        xmlText =[[<vlayout>
+                        <box flexibleheight="1">
+                            <tmpro text="{gold_1}  {health_3}" fontsize="48"/>
+                        </box>
+                        <box flexibleheight="1">
+                                    <tmpro text="or" fontsize="26"/>>
+                        </box>
+                        <box flexibleheight="1">
+                            <tmpro text="Put a champion without a cost (3 {shield} max) from your discard into your hand." fontsize="14" />
+                        </box>
+                    </vlayout>]]
+    })
+    local cardLayoutHeal = createLayout({
+        name = "Everburning Candle",
+        art = "art/t_cleric_everburning_candle",
+        frame = "frames/Cleric_CardFrame",
+        cardTypeLabel = "Item",
+        xmlText =[[<vlayout>
+                    <hlayout flexibleheight="3">
+                            <tmpro text="{gold_1}   {health_3}" fontsize="60" flexiblewidth="1" />
+                    </hlayout>
+                </vlayout>]]
+    })
+    local cardLayoutChamp = createLayout({
+        name = "Everburning Candle",
+        art = "art/t_cleric_everburning_candle",
+        frame = "frames/Cleric_CardFrame",
+        cardTypeLabel = "Item",
+        xmlText =[[<vlayout>
+                    <hlayout flexibleheight="3">
+                            <tmpro text="Put a champion without a cost (3 {shield} max) from your discard into your hand." fontsize="25" flexiblewidth="1" />
+                    </hlayout>
+                </vlayout>]]
+    })
+   local noCostChamps = selectLoc(loc(currentPid, discardPloc)).where(isCardChampion().And(getCardCost().eq(0)).And(getCardHealth().lte(3)))
+    --
+    return createItemDef({
+        id = "cleric_everburning_candle",
+        name = "Everburning Candle",
+        acquireCost = 0,
+        cardTypeLabel = "Item",
+        types = { itemType, noStealType, clericType},
+        factions = {},
+        layout = cardLayout,
+        playLocation = castPloc,
+            abilities = {
+                    createAbility({
+                        id = "brightMain",
+                        trigger = autoTrigger,
+                        playAllType = blockPlayType,
+                        effect = pushChoiceEffect({
+                                choices={
+                                    {
+                                        effect = healPlayerEffect(currentPid, 3).seq(gainGoldEffect(1)),
+                                        layout = cardLayoutHeal,                     
+                                    },
+                                    {
+                                        effect = pushTargetedEffect({
+                                                        desc="Put a champion without a cost (3 {shield} max) from your discard into your hand.",
+                                                        min=0,
+                                                        max=1,
+                                                        validTargets = noCostChamps,
+                                                        targetEffect = moveTarget(loc(currentPid, handPloc)),
+                                                        tags = {toughestTag}      
+                                                    }),
+                                        layout = cardLayoutChamp,
+                                    }
+                                }
+                            })
+                    }),
+                },
+    })
+end
+
+function cleric_imperial_sailor_carddef()
+    local cardLayout = createLayout({
+        name = "Imperial Sailor",
+        art = "art/treasures/t_imperial_sailor",
+        frame = "frames/Cleric_CardFrame",
+        cardTypeLabel = "Champion",
+        isGuard = false,
+        health = 3,
+        types = { championType, noStealType, humanType, clericType},
+        xmlText = [[<vlayout>
+                        <hlayout flexibleheight="1.8">
+                            <box flexiblewidth="1">
+                                <tmpro text="{expend}" fontsize="42"/>
+                            </box>
+                            <vlayout flexiblewidth="7">
+                                <box flexibleheight="1">
+                                    <tmpro text="Reserve 1" fontsize="18" />
+                                </box>
+                                <box flexibleheight="2">
+                                    <tmpro text="{gold_1} {combat_2}" fontsize="42" />
+                                </box>
+                            </vlayout>
+                        </hlayout>
+                        <divider/>
+                        <hlayout flexibleheight="1">
+                            <box flexiblewidth="1">
+                                <tmpro text="{scrap}" fontsize="42"/>
+                            </box>
+                            <box flexiblewidth="7">
+                                <tmpro text="Sacrifice any number of cards in the market. Draw 1." fontsize="18" />
+                            </box>>
+                        </hlayout>
+                    </vlayout>
+                    ]]
+    })
+    return createChampionDef({
+        id = "cleric_imperial_sailor",
+        name = "Imperial Sailor",
+        acquireCost = 0,
+        health = 3,
+        isGuard = false,
+        layout = cardLayout,
+        factions = {},
+        types = { championType, noStealType, humanType, clericType},
+        abilities = {
+            createAbility({
+                id = "cleric_imperial_sailor",
+                trigger = autoTrigger,
+                activations = multipleActivations,
+                cost = expendCost,
+                effect = gainGoldEffect(1).seq(gainCombatEffect(2))
+            }),
+             createAbility({
+                id = "cleric_imperial_sailor_srap",
+                trigger = uiTrigger,
+                activations = singleActivations,
+                cost = sacrificeSelfCost,
+                effect = targetedEffect({
+                    desc = "Sacrifice any number of cards in the market. Draw 1.",
+                    min = 0,
+                    max = 5,
+                    validTargets = selectLoc(centerRowLoc),
+                    targetEffect = sacrificeTarget().seq(drawCardsEffect(1)),
+                })
+            }),
+        }
     })
 end
 
@@ -645,10 +822,10 @@ function monk_horn_of_ascendance_carddef()
         frame = "frames/monk_frames/monk_item_cardframe",
         cardTypeLabel = "Item",
         xmlText =[[<vlayout>
-  <text text="Reserve 1" fontsize="22" fontstyle="italic"/>
-<text text="Draw 1.
-The next time you acquire a card this turn, gain 2 {gold}." fontsize="27"/>                           
-</vlayout>]]
+                    <text text="Reserve 1" fontsize="22" fontstyle="italic"/>
+                    <text text="Draw 1.
+                    The next time you acquire a card this turn, gain 2 {gold}." fontsize="27"/>                           
+                </vlayout>]]
     })
     return createItemDef({
         id = "monk_horn_of_ascendance",
@@ -673,7 +850,7 @@ end
 
 --=======================================
 function monk_wraps_of_strength_carddef()
-local card_name = "monk_wraps_of_strength"
+    local card_name = "monk_wraps_of_strength"
 	local cardLayout = createLayout({
         name = "Wraps of Strength",
         art = "art/classes/monk/monk_wraps_of_strength",
@@ -681,13 +858,13 @@ local card_name = "monk_wraps_of_strength"
         cardTypeLabel = "Magic Armor",
         xmlText =[[<hlayout spacing="10" forcewidth="true">
                     <icon text="{requiresHealth_25}" fontsize="90"/>    <vlayout spacing="1">
-<text text="
-If you have 4 
-Tao Lu 
-actions in play," fontsize="24"/>
-                    <text text="{combat_2} {health_2}" fontsize="40"/>
-                    </vlayout>
-                </hlayout>]]
+                    <text text="
+                    If you have 4 
+                    Tao Lu 
+                    actions in play," fontsize="24"/>
+                                        <text text="{combat_2} {health_2}" fontsize="40"/>
+                                        </vlayout>
+                                    </hlayout>]]
     })
     return createMagicArmorDef({
         id = card_name,
@@ -716,9 +893,9 @@ function monk_cobra_fang_carddef()
         frame = "frames/monk_frames/monk_action_cardframe",
         cardTypeLabel = "Action",
         xmlText =[[<vlayout spacing="20"> 
-  <text text="Gain 1 {combat} for each Tao Lu action in play." fontsize="26"/>
-  <text text="You count as having an extra Tao Lu action this turn." fontsize="26"/>
-</vlayout>]]
+                <text text="Gain 1 {combat} for each Tao Lu action in play." fontsize="26"/>
+                <text text="You count as having an extra Tao Lu action this turn." fontsize="26"/>
+                </vlayout>]]
     })
     local counter_name = "cobra_fang_last_custom_value"
     local trigger_name = "cobra_fang_add_one_damage"
