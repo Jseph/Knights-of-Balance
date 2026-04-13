@@ -153,7 +153,7 @@ function p1DrawBuffDef()
                         .Or(selectLoc(loc(oppPid, buffsPloc)).where(isCardType(elfType)).count().gte(1)
                             .And(selectLoc(loc(oppPid, handPloc)).count().eq(1)))
                     ),
-                effect = sacrificeSelf()
+                effect = drawCardsEffect(3)
             }),
             createAbility({
                 id = "draw_logic_elf_t2+",
